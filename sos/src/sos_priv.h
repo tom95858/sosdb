@@ -83,11 +83,18 @@ typedef enum sos_internal_schema_e {
 	SOS_SCHEMA_FIRST_USER = 128,
 } sos_ischema_t;
 
-#define SOS_LATEST_VERSION 0x04030300
+#define SOS_LATEST_VERSION ((SOS_VERS_MAJOR << 24) | (SOS_VERS_MINOR << 16) | SOS_VERS_FIX)
 #define SOS_SCHEMA_SIGNATURE 0x534f535348434D41 /* 'SOSSCHMA' */
 typedef struct sos_schema_udata_s {
 	uint64_t signature;
-	uint32_t version;
+	union {
+		uint32_t version;
+		struct sos_vers_s {
+			uint16_t fix;
+			uint8_t minor;
+			uint8_t major;
+		} vers;
+	};
 	ods_atomic_t last_schema_id;
 } *sos_schema_udata_t;
 #define SOS_SCHEMA_UDATA(_o_) ODS_PTR(sos_schema_udata_t, _o_)
@@ -184,9 +191,10 @@ typedef struct sos_pos_data_s {
  * +-----------+--~~~~~---+
  */
 typedef struct sos_obj_data_s {
-	uint64_t schema;	/* The unique schema identifier */
+	uint64_t schema_id;	/* The unique schema identifier */
 	uint8_t data[0];
 } *sos_obj_data_t;
+
 struct sos_obj_s {
 	ods_atomic_t ref_count;
 	sos_t sos;
@@ -194,8 +202,11 @@ struct sos_obj_s {
 	sos_obj_ref_t obj_ref;
 	ods_obj_t obj;
 	LIST_ENTRY(sos_obj_s) entry;
+	size_t size;
+	size_t array_data_size;
+	uint64_t next_array_off;
 };
-#define SOS_OBJ(_o_) ODS_PTR(sos_obj_data_t, _o_)
+#define SOS_OBJ(_o_) ODS_PTR(sos_obj_data_t, (_o_))
 
 #define SOS_SIGNATURE "SOS_OBJ_STORE"
 #define SOS_OBJ_BE	1
@@ -210,10 +221,12 @@ typedef struct sos_join_data_s {
 typedef struct sos_attr_data_s {
 	char name[SOS_ATTR_NAME_LEN];
 	uint32_t id;
-	uint32_t type:8;
-	uint32_t pad:23;
-	uint32_t size;		/* The size of the attribute in bytes */
 	uint32_t indexed:1;	/* !0 if there is an associated index */
+	uint32_t type:7;	/* Attribute type */
+	uint32_t pad:24;
+	uint32_t el_sz:8;	/* The size of each element if array */
+	uint32_t reserved:24;	/* not used */
+	uint32_t size;		/* The size of the attribute in bytes */
 	uint64_t offset;	/* location of attribute in the object */
 	ods_ref_t ext_ref;	/* reference to extended data */
 } *sos_attr_data_t;
@@ -230,6 +243,7 @@ struct sos_index_s {
 	ods_idx_t idx;
 };
 
+#define SOS_JOIN_EXT_SIZE(_count_)   ((sizeof(uint32_t) * _count_) + sizeof(uint32_t))
 struct sos_attr_s {
 	sos_attr_data_t data;
 	struct sos_attr_data_s data_;
@@ -255,10 +269,11 @@ typedef struct sos_schema_data_s {
 	ods_atomic_t ref_count;
 	uint32_t id;		/* Index into the schema dictionary */
 	uint32_t attr_cnt;	/* Count of attributes in object class */
+	uint32_t array_cnt;	/* Count of array attributes in the object class */
 	uint32_t key_sz;	/* Size of largest indexed attribute */
-	uint64_t obj_sz;	/* Size of object */
+	uint64_t obj_sz;	/* Size of scalars in object */
 	uint64_t el_sz;		/* Size of each element if this is an array object */
-	uint64_t schema_sz;	/* Size of schema */
+	uint64_t schema_sz;	/* Size of schema, not including arrays */
 	struct sos_attr_data_s attr_dict[0];
 } *sos_schema_data_t;
 
@@ -461,6 +476,9 @@ ods_key_comp_t __sos_set_key_comp_to_min(ods_key_comp_t comp, sos_attr_t a, size
 ods_key_comp_t __sos_set_key_comp_to_max(ods_key_comp_t comp, sos_attr_t a, size_t *comp_len);
 int __sos_value_is_max(sos_value_t v);
 int __sos_value_is_min(sos_value_t v);
+void __sos_fixup_array_values(sos_schema_t schema, sos_obj_t obj);
+size_t __sos_obj_array_size(sos_obj_t obj);
+size_t __sos_obj_total_size(sos_obj_t obj);
 
 extern FILE *__ods_log_fp;
 extern uint64_t __ods_log_mask;
@@ -486,6 +504,8 @@ static inline void sos_log(int level, const char *func, int line, char *fmt, ...
 #define sos_warn(fmt, ...) sos_log(SOS_LOG_WARN, __func__, __LINE__, fmt, ##__VA_ARGS__)
 #define sos_info(fmt, ...) sos_log(SOS_LOG_INFO, __func__, __LINE__, fmt, ##__VA_ARGS__)
 #define sos_debug(fmt, ...) sos_log(SOS_LOG_DEBUG, __func__, __LINE__, fmt, ##__VA_ARGS__)
+
+#define SOS_ROUNDUP(_sz_, _align_) (((_sz_) + (_align_) - 1) & ~((_align_)-1))
 
 #endif
 #endif

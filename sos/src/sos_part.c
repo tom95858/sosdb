@@ -312,7 +312,7 @@ static int __unindex_callback_fn(ods_t ods, ods_obj_t obj, void *arg)
 	struct iter_args *uarg = arg;
 	sos_part_t part = uarg->part;
 	sos_obj_data_t sos_obj_data = obj->as.ptr;
-	sos_schema_t schema = sos_schema_by_id(part->sos, sos_obj_data->schema);
+	sos_schema_t schema = sos_schema_by_id(part->sos, sos_obj_data->schema_id);
 	if (!schema) {
 		sos_warn("Object at %p is missing a valid schema id.\n", ods_obj_ref(obj));
 		/* This is a garbage object that should not be here */
@@ -385,7 +385,7 @@ static int __reindex_callback_fn(ods_t ods, ods_obj_t obj, void *arg)
 	struct iter_args *rarg = arg;
 	sos_part_t part = rarg->part;
 	sos_obj_data_t sos_obj_data = obj->as.ptr;
-	sos_schema_t schema = sos_schema_by_id(part->sos, sos_obj_data->schema);
+	sos_schema_t schema = sos_schema_by_id(part->sos, sos_obj_data->schema_id);
 	if (!schema) {
 		sos_warn("Object at %p is missing a valid schema id.\n", ods_obj_ref(obj));
 		/* This is a garbage object that should not be here */
@@ -760,10 +760,10 @@ static int __shallow_export(sos_t dst_sos, sos_t src_sos,
 	ODS_KEY(exp_key);
 	union exp_obj_u exp;
 
-	sschema = sos_schema_by_id(src_sos, sos_obj_data->schema);
+	sschema = sos_schema_by_id(src_sos, sos_obj_data->schema_id);
 	if (!sschema) {
 		sos_error("ODS object with ref %p has the invalid schema id %ld\n",
-			  (void *)ods_obj_ref(src_ods_obj), sos_obj_data->schema);
+			  (void *)ods_obj_ref(src_ods_obj), sos_obj_data->schema_id);
 		return EINVAL;
 	}
 
@@ -797,7 +797,7 @@ static int __shallow_export(sos_t dst_sos, sos_t src_sos,
 			return ENOSPC;
 
 		memcpy(dobj->as.ptr, src_ods_obj->as.ptr, src_ods_obj->size);
-		SOS_OBJ(dobj)->schema = dschema->data->id;
+		SOS_OBJ(dobj)->schema_id = dschema->data->id;
 
 		/* Add this object to the index of objects that we've created */
 		exp.exp_data.from_ref = ods_obj_ref(src_ods_obj);
@@ -1027,10 +1027,10 @@ static int __index_callback_fn(ods_t ods, ods_obj_t ods_obj, void *arg)
 	sos_schema_t schema;
 	sos_obj_ref_t ref;
 
-	schema = sos_schema_by_id(sos, sos_obj_data->schema);
+	schema = sos_schema_by_id(sos, sos_obj_data->schema_id);
 	if (!schema) {
 		sos_warn("An object with the invalid schema id %d was "
-			 "encountered at %p.\n", sos_obj_data->schema,
+			 "encountered at %p.\n", sos_obj_data->schema_id,
 			 ods_obj_ref(ods_obj));
 		return EINVAL;
 	}
@@ -1649,7 +1649,7 @@ static int __part_obj_iter_cb(ods_t ods, ods_obj_t obj, void *arg)
 	sos_obj_t sos_obj;
 	sos_part_t part = oi_args->part;
 	sos_obj_data_t sos_obj_data = obj->as.ptr;
-	sos_schema_t schema = sos_schema_by_id(part->sos, sos_obj_data->schema);
+	sos_schema_t schema = sos_schema_by_id(part->sos, sos_obj_data->schema_id);
 	if (!schema) {
 		sos_warn("Object at %p is missing a valid schema id.\n", ods_obj_ref(obj));
 		/* This is a garbage object that should not be here */
